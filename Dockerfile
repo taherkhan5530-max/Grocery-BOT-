@@ -1,15 +1,11 @@
 FROM python:3.9-slim
 WORKDIR /app
-
-# রিকোয়ারমেন্টস ইনস্টল
+requirements.txt কপি করুন এবং ইন্সটল করুন
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
-# আপনার সব কোড ফাইল কপি (.py, config.py, handlers ইত্যাদি)
+বাকি সব সোর্স কোড কপি করুন
 COPY . .
-
-# Render এই পোর্টে এক্সপোজ করবে
+আপনার bot (2).py ফাইলের মতো পোর্ট এক্সপোজ করুন
 EXPOSE 10000
-
-# Gunicorn এর বদলে সরাসরি main.py ফাইলটি চালানো হচ্ছে
-CMD ["python", "main.py"]
+Gunicorn দিয়ে 'main.py' ফাইলের 'server' নামক Flask অ্যাপটি চালান
+CMD ["gunicorn", "--bind", "0.0.0.0:10000", "main:server"]
