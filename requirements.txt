@@ -1,6 +1,9 @@
-python-telegram-bot[persistence,webhooks]
+python-telegram-bot[persistence]
 python-dotenv
 aiohttp
 Pillow
 requests
 telegram
+Flask
+gunicorn
+urllib3
