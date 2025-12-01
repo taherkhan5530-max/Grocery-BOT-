@@ -1,9 +1,10 @@
 # main.py
 
 import logging
-from telegram.ext import Application, CommandHandler
-from config import TELEGRAM_BOT_TOKEN
-from handlers_admin import add_product_handler
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
+from config import TELEGRAM_BOT_TOKEN, AUTHORIZED_ADMIN_IDS # <--- AUTHORIZED_ADMIN_IDS ইমপোর্ট করা হয়েছে
+from handlers_admin import add_product_handler, delete_product_handler # <--- delete_product_handler ইমপোর্ট করা হয়েছে
 
 # Logging সেটআপ
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -12,11 +13,17 @@ logger = logging.getLogger(__name__)
 # সাধারণ /start কমান্ড হ্যান্ডলার
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """বট শুরু হলে ওয়েলকাম মেসেজ দেয়।"""
-    user_id = update.effective_user.id
+    # ensure effective_user is not None before accessing id
+    if update.effective_user: 
+        user_id = update.effective_user.id
+    else:
+        # If user is somehow None (rare), assume not authorized
+        user_id = 0 
+    
     if user_id in AUTHORIZED_ADMIN_IDS:
         message = (
             "স্বাগতম! আপনি একজন অনুমোদিত অ্যাডমিন।\n"
-            "প্রোডাক্ট যোগ করার জন্য `/addproduct` ব্যবহার করুন।"
+            "প্রোডাক্ট যোগ করার জন্য `/addproduct` এবং ডিলিট করার জন্য `/deleteproduct` ব্যবহার করুন।"
         )
     else:
         message = "স্বাগতম! আপনি একটি ওয়েবসাইট ম্যানেজমেন্ট বটে সংযুক্ত হয়েছেন। তবে আপনার অ্যাডমিন অনুমতি নেই।"
@@ -32,7 +39,8 @@ def main():
 
     # কমান্ড হ্যান্ডলার যোগ করা
     application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(add_product_handler) # অ্যাডমিন কনভার্সেশন হ্যান্ডলার
+    application.add_handler(add_product_handler)         # ✅ /addproduct কনভার্সেশন হ্যান্ডলার
+    application.add_handler(delete_product_handler)      # ✅ /deleteproduct কনভার্সেশন হ্যান্ডলার
 
     # বট শুরু
     logger.info("Bot started successfully. Polling for updates...")
