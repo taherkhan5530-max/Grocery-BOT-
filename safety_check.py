@@ -1,43 +1,52 @@
-import aiohttp
-import config
+# app.py বা server.py
 
-async def check_image(image_path):
-    """
-    Checks an image against the Sight Engine API for explicit content.
-    Returns True if explicit, False otherwise.
-    """
-    if not config.SE_API_USER or not config.SE_API_SECRET:
-        print("Warning: Sight Engine API credentials not set. Skipping safety check.")
-        return False
+from flask import Flask, request, jsonify
+import os
+import uuid
+import sqlite3 # <--- SQLite ইমপোর্ট করা হয়েছে
 
-    try:
-        async with aiohttp.ClientSession() as session:
-            data = {
-                'models': 'nudity-2.0,wad', # Check for nudity, weapons, alcohol, drugs
-                'api_user': config.SE_API_USER,
-                'api_secret': config.SE_API_SECRET
-            }
-            
-            with open(image_path, 'rb') as f:
-                data['media'] = f.read()
+# ফাইলপথ
+WEBSITE_SECRET_TOKEN = "bazerwala_secret_7a9c2b8f4e1d6a3c9e2f5b8a1d4c7e0f"
+UPLOAD_FOLDER = 'static/uploads'
+DATABASE_FILE = 'products.db' # ডেটাবেসের নাম
 
-                async with session.post('https://api.sightengine.com/1.0/check.json', data=data) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        
-                        # Check nudity (e.g., raw score > 0.5)
-                        if result.get('nudity', {}).get('raw', 0) > 0.5:
-                            return True
-                        # Check weapons/alcohol/drugs (any probability > 0.5)
-                        if result.get('weapon', 0) > 0.5 or \
-                           result.get('alcohol', 0) > 0.5 or \
-                           result.get('drugs', 0) > 0.5:
-                            return True
-                            
-                        return False
-                    else:
-                        print(f"Sight Engine Error: {await response.text()}")
-                        return False # Fail safe: treat as non-explicit if API fails
-    except Exception as e:
-        print(f"Error in safety_check: {e}")
-        return False # Fail safe
+app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# নিশ্চিত করুন আপলোড ফোল্ডারটি বিদ্যমান
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
+# =========================================================================
+#                          ডেটাবেস ফাংশন
+# =========================================================================
+
+def get_db_connection():
+    """ডেটাবেসের সাথে সংযোগ তৈরি করে।"""
+    conn = sqlite3.connect(DATABASE_FILE)
+    conn.row_factory = sqlite3.Row # কলামের নাম ব্যবহার করে ডেটা অ্যাক্সেসের জন্য
+    return conn
+
+def init_db():
+    """ডেটাবেস এবং প্রোডাক্ট টেবিল তৈরি করে (যদি না থাকে)।"""
+    conn = get_db_connection()
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            price REAL NOT NULL,
+            description TEXT,
+            image_url TEXT NOT NULL
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+# অ্যাপ শুরু হওয়ার আগে ডেটাবেস ইনিশিয়ালাইজ করুন
+init_db()
+
+# =========================================================================
+#                     /api/add_product (প্রোডাক্ট যোগ)
+# =========================================================================
+
+# (add_product_api ফাংশনটি নিচে দেখুন)
