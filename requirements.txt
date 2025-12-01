@@ -1,9 +1,2 @@
-python-telegram-bot[persistence]
-python-dotenv
-aiohttp
-Pillow
+python-telegram-bot==20.8
 requests
-telegram
-Flask
-gunicorn
-urllib3
