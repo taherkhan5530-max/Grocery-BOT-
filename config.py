@@ -1,27 +1,13 @@
-import os
-from dotenv import load_dotenv
+# config.py
 
-# .env file loading 
-load_dotenv()
+# আপনার দেওয়া টেলিগ্রাম বট টোকেন
+TELEGRAM_BOT_TOKEN = "8334178606:AAFUnL3NRKOgWnqvuSdjZBphV53n6mme0ts"
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN environment variable not set.")
+# আপনার ওয়েবসাইটের API কনফিগারেশন (এইগুলো অবশ্যই পরিবর্তন করুন)
+WEBSITE_API_BASE_URL = "https://your-website.com/api/"
+WEBSITE_API_UPLOAD_ENDPOINT = WEBSITE_API_BASE_URL + "add_product" 
+WEBSITE_SECRET_TOKEN = "YOUR_SUPER_SECURE_API_KEY_12345" # আপনার ওয়েবসাইটের গোপন API Key
 
-# Sight Engine API
-SE_API_USER = os.getenv("SE_API_USER")
-SE_API_SECRET = os.getenv("SE_API_SECRET")
-
-# Remove.bg API
-RBG_API = os.getenv("RBG_API")
-
-# Telegram IDs
-try:
-    # অ্যাডমিন আইডি একটি কমা-সেপারেটেড স্ট্রিং হতে পারে (e.g., "123,456")
-    ADMIN_IDS = [int(admin_id.strip()) for admin_id in os.getenv("ADMIN_ID", "").split(',')]
-    DB_C_ID = int(os.getenv("DB_C_ID"))
-except (ValueError, TypeError):
-    raise ValueError("ADMIN_ID and DB_C_ID must be set as valid integers.")
-
-if not all([SE_API_USER, SE_API_SECRET, RBG_API]):
-    raise ValueError("One or more API environment variables are missing.")
+# অনুমোদিত অ্যাডমিন ইউজারের Telegram ID (আপনার দেওয়া Chat ID)
+# এই আইডিগুলোই কেবল ওয়েবসাইট ম্যানেজমেন্ট কমান্ড চালাতে পারবে
+AUTHORIZED_ADMIN_IDS = [5939435550]
