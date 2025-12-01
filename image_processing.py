@@ -1,78 +1,39 @@
-import aiohttp
-import config
-from PIL import Image
-import io
-import zipfile
+# config.py
 
-async def remove_background(image_path):
-    """
-    Removes background from an image.
-    Returns bytes of the processed image (PNG) or None if failed.
-    """
-    if not config.RBG_API:
-        print("Error: Remove.bg API key (RBG_API) not set.")
-        return None
-        
-    try:
-        async with aiohttp.ClientSession() as session:
-            data = aiohttp.FormData()
-            data.add_field('image_file', open(image_path, 'rb'))
-            data.add_field('size', 'auto')
+# ==================================
+# Telegram Bot Configuration
+# ==================================
+# আপনার দেওয়া বট টোকেন বসানো হয়েছে
+TELEGRAM_BOT_TOKEN = "8334178606:AAFUnL3NRKOgWnqvuSdjZBphV53n6mme0ts" 
 
-            headers = {'X-Api-Key': config.RBG_API}
-            
-            async with session.post('https://api.remove.bg/v1.0/removebg', data=data, headers=headers) as response:
-                if response.status == 200:
-                    return await response.read()
-                else:
-                    print(f"Remove.bg Error: {response.status} - {await response.text()}")
-                    return None
-    except Exception as e:
-        print(f"Error in remove_background: {e}")
-        return None
+# আপনার দেওয়া চ্যাট আইডি (5939435550) অ্যাডমিন আইডি হিসেবে ব্যবহার করা হয়েছে।
+ADMIN_IDS = [5939435550] 
+# আগের ডামি অ্যাডমিন আইডিগুলো (123456789, 987654321) বাদ দেওয়া হয়েছে।
 
-async def convert_format(image_bytes, target_format):
-    """
-    Converts image bytes (PNG) to a target format.
-    Returns (file_bytes, filename) tuple.
-    """
-    try:
-        img = Image.open(io.BytesIO(image_bytes))
-        output_bytes = io.BytesIO()
-        
-        target_format = target_format.upper()
-        
-        if target_format == 'JPG':
-            # Convert to RGB (for JPEG)
-            img = img.convert('RGB')
-            img.save(output_bytes, format='JPEG')
-            filename = 'converted.jpg'
-        
-        elif target_format == 'PNG':
-            img.save(output_bytes, format='PNG')
-            filename = 'converted.png'
-            
-        elif target_format == 'PDF':
-            # Convert to RGB (PDF doesn't handle RGBA well)
-            img = img.convert('RGB')
-            img.save(output_bytes, format='PDF', resolution=100.0)
-            filename = 'converted.pdf'
-            
-        elif target_format == 'ZIP':
-            with zipfile.ZipFile(output_bytes, 'w') as zf:
-                # Save the PNG inside the zip
-                img.save(io.BytesIO(), format='PNG')
-                zf.writestr('bg_removed.png', io.BytesIO(image_bytes).getvalue())
-            filename = 'converted.zip'
+# যদি DB_CHANNEL_ID আপনার চ্যানেলের আইডি হয়, তবে এটি ঠিক আছে।
+# যদি এটি আপনার নিজের চ্যাট আইডি হয়, তবে এটিকে নেগেটিভ (-100) হতে হবে না। 
+# ধরে নেওয়া হলো 5939435550 হলো আপনার ব্যক্তিগত চ্যাট আইডি এবং আপনি এটিই লগিং এর জন্য ব্যবহার করবেন।
+DB_CHANNEL_ID = 5939435550 
 
-        # ... আপনি এখানে আরও ফরম্যাট যোগ করতে পারেন (e.g., WEBP, BMP)
-            
-        else:
-            return None, None # Unsupported format
 
-        output_bytes.seek(0)
-        return output_bytes.getvalue(), filename
-        
-    except Exception as e:
-        print(f"Error in convert_format: {e}")
-        return None, None
+# ==================================
+# API Keys (For Image Processing)
+# ==================================
+# ⚠️ আপনাকে এই কীগুলি বসাতে হবে।
+RBG_API = "YOUR_REMOVE_BG_API_KEY_XYZ" 
+SE_API_USER = "YOUR_SIGHTENGINE_API_USER_XYZ" 
+SE_API_SECRET = "YOUR_SIGHTENGINE_API_SECRET_XYZ" 
+
+
+# ==================================
+# Website Product Management API Config
+# ==================================
+# আপনার Flask ওয়েবসাইটের রুট API URL
+WEBSITE_API_BASE_URL = "https://your-site.replit.dev/api/" 
+# প্রোডাক্ট যোগ করার সম্পূর্ণ URL
+WEBSITE_API_UPLOAD_ENDPOINT = WEBSITE_API_BASE_URL + "add_product"
+# সিকিউরিটির জন্য বটের সাথে ওয়েবসাইটের গোপন টোকেন
+WEBSITE_SECRET_TOKEN = "bazerwala_secret_7a9c2b8f4e1d6a3c9e2f5b8a1d4c7e0f"
+
+# PRODUCT API এর জন্য AUTHORIZED_ADMIN_IDS ব্যবহার করা হবে
+AUTHORIZED_ADMIN_IDS = ADMIN_IDS
