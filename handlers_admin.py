@@ -1,113 +1,143 @@
-import config
-import db_helpers
-from telegram import Update
-from telegram.ext import ContextTypes
-from telegram.constants import ParseMode
-from telegram.error import TelegramError
+# handlers_admin.py
 
-# Helper to check admin status
+from telegram import Update, ForceReply
+from telegram.ext import (
+    CommandHandler, MessageHandler, filters,
+    ConversationHandler, ContextTypes
+)
+import requests
+import logging
+from config import (
+    WEBSITE_API_UPLOAD_ENDPOINT, WEBSITE_SECRET_TOKEN, AUTHORIZED_ADMIN_IDS
+)
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Conversation States
+PRODUCT_NAME, PRODUCT_PRICE, PRODUCT_DESCRIPTION, PRODUCT_PHOTO = range(4)
+
+# ১. অথরাইজেশন চেক
 def is_admin(user_id):
-    return user_id in config.ADMIN_IDS
+    """চেক করে ইউজার অ্যাডমিন কিনা।"""
+    return user_id in AUTHORIZED_ADMIN_IDS
 
-async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id):
-        return
-
-    try:
-        user_id_to_ban = int(context.args[0])
-        
-        # We need to access that user's data. 
-        # This is tricky without loading their data first.
-        # A simple ban flag might not be stored yet if the user never started the bot.
-        # A better approach (not implemented here) would be a separate ban list.
-        # For simplicity, we assume we can fetch their user_data if they ever used the bot.
-        
-        # This line is complex with PicklePersistence. We'll use a simpler 'ban list'.
-        if 'ban_list' not in context.bot_data:
-            context.bot_data['ban_list'] = set()
-        
-        context.bot_data['ban_list'].add(user_id_to_ban)
-        
-        # Also update the user's personal data if they exist
-        # This requires manually loading/saving persistence data, which is complex.
-        # We will rely on checking the ban_list AND user_data.
-        # When the user next messages, their `user_data` will be loaded, 
-        # and we can set `user_data['banned'] = True` then.
-        
-        await update.message.reply_text(f"User {user_id_to_ban} has been added to the ban list.")
-        await db_helpers.log_event_to_db(context, f"Admin {update.effective_user.id} banned user {user_id_to_ban}")
-
-    except (IndexError, ValueError):
-        await update.message.reply_text("Usage: /ban <user_id>")
-
-async def unban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id):
-        return
-
-    try:
-        user_id_to_unban = int(context.args[0])
-        
-        if 'ban_list' in context.bot_data:
-            context.bot_data['ban_list'].discard(user_id_to_unban)
-            
-        # We also need to reset their user_data if it's loaded
-        # This is a limitation of this simple model.
-        # A proper implementation would fetch and update the user's pickled data.
-            
-        await update.message.reply_text(f"User {user_id_to_unban} has been removed from the ban list. "
-                                        "They may need to type /start to reset their status.")
-    except (IndexError, ValueError):
-        await update.message.reply_text("Usage: /unban <user_id>")
-
-
-async def send_message_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id):
-        return
-
-    try:
-        user_id = int(context.args[0])
-        message_text = " ".join(context.args[1:])
-        
-        if not message_text:
-            await update.message.reply_text("Usage: /sendmsg <user_id> <message>")
-            return
-            
-        await context.bot.send_message(chat_id=user_id, text=message_text)
-        await update.message.reply_text("Message sent successfully.")
-        
-    except (IndexError, ValueError):
-        await update.message.reply_text("Usage: /sendmsg <user_id> <message>")
-    except TelegramError as e:
-        await update.message.reply_text(f"Could not send message: {e}")
-
-
-async def send_message_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.effective_user.id):
-        return
-
-    message_text = " ".join(context.args)
-    if not message_text:
-        await update.message.reply_text("Usage: /sendmsgall <message>")
-        return
-
-    all_users = db_helpers.get_all_users(context)
-    sent_count = 0
-    failed_count = 0
+# ২. /addproduct কমান্ড শুরু
+async def start_add_product(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """কনভার্সেশন শুরু করে এবং অথরাইজেশন চেক করে।"""
+    user_id = update.effective_user.id
     
-    await update.message.reply_text(f"Starting broadcast to {len(all_users)} users. This may take time.")
+    if not is_admin(user_id):
+        logger.warning(f"Unauthorized access attempt by user {user_id} for /addproduct.")
+        await update.message.reply_text("দুঃখিত, আপনার এই কমান্ড ব্যবহারের অনুমতি নেই।")
+        return ConversationHandler.END
 
-    for user_id in all_users:
-        try:
-            await context.bot.send_message(chat_id=user_id, text=message_text)
-            sent_count += 1
-        except TelegramError as e:
-            # User blocked the bot, etc.
-            print(f"Failed to send to {user_id}: {e}")
-            failed_count += 1
-            
     await update.message.reply_text(
-        f"Broadcast complete.\n"
-        f"Successfully sent: {sent_count}\n"
-        f"Failed: {failed_count}"
+        "নতুন প্রোডাক্ট যোগ করার প্রক্রিয়া শুরু হলো।\n"
+        "প্রোডাক্টের **নাম** লিখুন:",
+        reply_markup=ForceReply(selective=True)
     )
+    return PRODUCT_NAME
+
+# ৩. নাম গ্রহণ
+async def get_product_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """প্রোডাক্টের নাম সেভ করে এবং দাম জানতে চায়।"""
+    context.user_data['name'] = update.message.text
+    await update.message.reply_text("প্রোডাক্টের **দাম** (শুধু সংখ্যায়) লিখুন:")
+    return PRODUCT_PRICE
+
+# ৪. দাম গ্রহণ
+async def get_product_price(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """প্রোডাক্টের দাম সেভ করে এবং বর্ণনা জানতে চায়।"""
+    try:
+        price = float(update.message.text.strip())
+        context.user_data['price'] = price
+        await update.message.reply_text("প্রোডাক্টের একটি সংক্ষিপ্ত **বর্ণনা** লিখুন:")
+        return PRODUCT_DESCRIPTION
+    except ValueError:
+        await update.message.reply_text("দয়া করে শুধুমাত্র সংখ্যায় দাম লিখুন। আবার চেষ্টা করুন:")
+        return PRODUCT_PRICE
+
+# ৫. বর্ণনা গ্রহণ
+async def get_product_description(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """প্রোডাক্টের বর্ণনা সেভ করে এবং ছবি আপলোড করতে বলে।"""
+    context.user_data['description'] = update.message.text
+    await update.message.reply_text("এবার প্রোডাক্টের **ছবিটি** আপলোড করুন।")
+    return PRODUCT_PHOTO
+
+# ৬. ছবি গ্রহণ ও API-তে পাঠানো (সমাপ্তি)
+async def get_product_photo_and_finish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """ছবি সেভ করে, ওয়েবসাইটে API-এর মাধ্যমে ডেটা পাঠায় এবং কনভার্সেশন শেষ করে।"""
     
+    # লোডিং মেসেজ
+    await update.message.reply_text("ছবি পেয়েছি! প্রোডাক্টটি ওয়েবসাইটে আপলোড করা হচ্ছে...")
+
+    try:
+        # ছবিটি ডাউনলোড করা
+        photo_file = await update.message.photo[-1].get_file()
+        photo_data = await photo_file.download_as_bytes()
+
+        # API Payload তৈরি
+        payload = {
+            'name': context.user_data['name'],
+            'price': context.user_data['price'],
+            'description': context.user_data['description'],
+            'api_token': WEBSITE_SECRET_TOKEN # সিকিউরিটির জন্য টোকেন
+        }
+        
+        # files ডিকশনারি তৈরি
+        files = {
+            # ('filename', binary_data, 'mime_type')
+            'product_image': (f"{context.user_data['name']}.jpg", photo_data, 'image/jpeg')
+        }
+
+        # API-তে POST রিকোয়েস্ট পাঠানো
+        response = requests.post(
+            WEBSITE_API_UPLOAD_ENDPOINT,
+            data=payload,
+            files=files,
+            timeout=10 # ১০ সেকেন্ডের মধ্যে রেসপন্স না পেলে বন্ধ
+        )
+        
+        if response.status_code in [200, 201]:
+            await update.message.reply_text(
+                f"✅ **সফল!** প্রোডাক্ট '{context.user_data['name']}' ওয়েবসাইটে যোগ করা হয়েছে।\n"
+                f"সার্ভার রেসপন্স: {response.text[:100]}..."
+            )
+        else:
+            await update.message.reply_text(
+                f"❌ **দুঃখিত**, প্রোডাক্ট যোগ করা যায়নি। ওয়েবসাইটের ত্রুটি কোড: {response.status_code}\n"
+                f"রেসপন্স: {response.text}"
+            )
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"API Request failed: {e}")
+        await update.message.reply_text(f"❌ API-তে যোগাযোগ ব্যর্থ হয়েছে। অনুগ্রহ করে সার্ভার এবং কনফিগারেশন চেক করুন।")
+    except Exception as e:
+        logger.error(f"An unexpected error occurred: {e}")
+        await update.message.reply_text(f"❌ একটি অপ্রত্যাশিত ত্রুটি হয়েছে: {e}")
+
+    # ডেটা পরিষ্কার করা এবং কনভার্সেশন শেষ করা
+    context.user_data.clear()
+    return ConversationHandler.END
+
+# কনভার্সেশন বাতিল করার ফাংশন
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """ইউজার ম্যানুয়ালি কনভার্সেশন বাতিল করলে।"""
+    context.user_data.clear()
+    await update.message.reply_text("প্রোডাক্ট যোগ করার প্রক্রিয়া বাতিল করা হয়েছে।")
+    return ConversationHandler.END
+
+
+# কনভার্সেশন হ্যান্ডলার তৈরি
+add_product_handler = ConversationHandler(
+    entry_points=[CommandHandler("addproduct", start_add_product)],
+    states={
+        PRODUCT_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_product_name)],
+        PRODUCT_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_product_price)],
+        PRODUCT_DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_product_description)],
+        PRODUCT_PHOTO: [MessageHandler(filters.PHOTO, get_product_photo_and_finish)],
+    },
+    # যেকোনো ধাপে /cancel কমান্ড দিলে
+    fallbacks=[CommandHandler('cancel', cancel)] 
+)
