@@ -20,6 +20,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # If user is somehow None (rare), assume not authorized
         user_id = 0 
     
+    # আইডি স্ট্রিং হিসাবে কনভার্ট করা
+    # NOTE: AUTHORIZED_ADMIN_IDS সাধারণত int বা str হিসাবে থাকতে পারে। এখানে user_id int।
+    # যদি config.py তে ADMIN_IDS স্ট্রিং থাকে, তাহলে user_id কে স্ট্রিং এ কনভার্ট করুন।
+    # আমরা ধরে নিচ্ছি config.py তে এটি integer সেট করা আছে, যা ভালো অভ্যাস।
+    
     if user_id in AUTHORIZED_ADMIN_IDS:
         message = (
             "স্বাগতম! আপনি একজন অনুমোদিত অ্যাডমিন।\n"
@@ -39,8 +44,8 @@ def main():
 
     # কমান্ড হ্যান্ডলার যোগ করা
     application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(add_product_handler)         # ✅ /addproduct কনভার্সেশন হ্যান্ডলার
-    application.add_handler(delete_product_handler)      # ✅ /deleteproduct কনভার্সেশন হ্যান্ডলার
+    application.add_handler(add_product_handler)        # ✅ /addproduct কনভার্সেশন হ্যান্ডলার
+    application.add_handler(delete_product_handler)     # ✅ /deleteproduct কনভার্সেশন হ্যান্ডলার
 
     # বট শুরু
     logger.info("Bot started successfully. Polling for updates...")
